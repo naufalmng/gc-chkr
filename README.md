@@ -21,7 +21,7 @@
 
 When Grafana Cloud says *"no data"*, everyone starts pointing fingers. `gc-hc` runs from the node and checks the usual suspects — DNS, TLS, auth, firewall rules, and endpoint URLs — so you can stop guessing and start fixing.
 
-### Install
+### Install / Update
 
 ```bash
 curl -fsSL https://github.com/naufalmng/gc-hc/releases/latest/download/gc-hc.sh | sudo bash
@@ -51,7 +51,7 @@ For full usage, configuration reference, architecture, and design notes, see **[
 
 Kalau Grafana Cloud bilang *"no data"*, biasanya semua mulai saling tuduh. `gc-hc` jalan dari sisi node dan ngecek tersangka utama — DNS, TLS, auth, firewall, dan URL endpoint — supaya lo bisa stop nebak-nebak dan mulai benerin masalahnya.
 
-### Instalasi
+### Instalasi / Pembaharuan
 
 ```bash
 curl -fsSL https://github.com/naufalmng/gc-hc/releases/latest/download/gc-hc.sh | sudo bash
