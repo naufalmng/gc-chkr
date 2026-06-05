@@ -107,6 +107,7 @@ prompt_choice() {
 
     if [[ " $allowed " == *" $input "* ]]; then
       printf -v "$var" '%s' "$input"
+      # shellcheck disable=SC2163  # indirect export for selected config var
       export "$var"
       return 0
     fi
