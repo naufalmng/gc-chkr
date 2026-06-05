@@ -49,7 +49,7 @@ bash -n "$TOOL" && { echo "  ok    tool parses";      PASS=$((PASS+1)); }
 
 echo
 echo "=== Tool exposes all expected commands ==="
-for cmd in onboard config show-config check status logs remove enable disable help version; do
+for cmd in onboard config check status logs remove enable disable help version; do
   if grep -Eq "^[[:space:]]*${cmd}\)" "$TOOL"; then
     printf '  ok    command: %s\n' "$cmd"
     PASS=$((PASS+1))
@@ -67,10 +67,10 @@ for v in GCLOUD_HOSTED_METRICS_URL GCLOUD_HOSTED_METRICS_ID \
          GC_HC_TIMEOUT GC_HC_RETRIES GC_HC_RETRY_DELAY \
          GC_HC_DNS GC_HC_TLS GC_HC_LOKI_WRITE \
          GC_HC_PROM_QUERY GC_HC_FLEET \
-         GC_HC_LOG_KEEP \
+         GC_HC_LOG_KEEP GC_HC_LOG_RETENTION \
          GC_HC_TRACE GC_HC_TRACE_TOOL \
          GC_HC_TRACE_TIMEOUT GC_HC_TRACE_MAX_HOPS \
-         GC_HC_TRACE_LOG_KEEP; do
+         GC_HC_TRACE_LOG_KEEP GC_HC_TRACE_LOG_RETENTION; do
   assert_in "$TOOL" "$v" "env: $v"
 done
 
@@ -132,6 +132,11 @@ echo
 echo "=== Standalone mode preserved ==="
 assert_in "$NEW"  'standalone' "standalone action"
 assert_in "$TOOL" '.gc-hc'     "standalone home"
+
+echo
+echo "=== SMTP config test dispatch preserved ==="
+assert_in "$TOOL" 'send_test_mail_saved "$GC_HC_MAIL_TEST"' "smtp test-only dispatch"
+assert_in "$TOOL" 'GC_HC_MAIL_AUTH="on"' "smtp provider auth default"
 
 echo
 printf '\nTotal: %d passed, %d failed\n' "$PASS" "$FAIL"

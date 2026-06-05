@@ -33,6 +33,9 @@ curl -fsSL https://github.com/naufalmng/gc-hc/releases/latest/download/gc-hc.sh 
 sudo gc-hc onboard       # configure + enable timer + first check
 gchc check               # run a check on demand
 gchc status              # see current state and last result
+gchc config show         # show core + mail config with secrets masked
+sudo gc-hc config smtp   # optional SMTP mail notifications
+gchc --help              # full command reference
 sudo apt-get remove gc-hc
 ```
 
@@ -60,6 +63,9 @@ curl -fsSL https://github.com/naufalmng/gc-hc/releases/latest/download/gc-hc.sh 
 sudo gc-hc onboard       # konfigurasi + aktifkan timer + jalankan check pertama
 gchc check               # jalankan check kapan saja
 gchc status              # lihat state dan hasil terakhir
+gchc config show         # lihat core + mail config dengan secret di-mask
+sudo gc-hc config smtp   # opsional: notifikasi email SMTP
+gchc --help              # referensi command lengkap
 sudo apt-get remove gc-hc
 ```
 

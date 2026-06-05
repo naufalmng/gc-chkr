@@ -90,6 +90,9 @@ EOF
   fi
 
   configure
+  if confirm "Configure mail notifications?" "n"; then
+    configure_mail
+  fi
   enable_timer
   run_check || true
   show_status

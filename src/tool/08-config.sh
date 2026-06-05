@@ -146,7 +146,9 @@ configure() {
     printf "GC_HC_TRACE_TIMEOUT='%s'\n"  "$GC_HC_TRACE_TIMEOUT"
     printf "GC_HC_TRACE_MAX_HOPS='%s'\n" "$GC_HC_TRACE_MAX_HOPS"
     printf "GC_HC_TRACE_LOG_KEEP='%s'\n" "$GC_HC_TRACE_LOG_KEEP"
+    printf "GC_HC_TRACE_LOG_RETENTION='%s'\n" "$GC_HC_TRACE_LOG_RETENTION"
     printf "GC_HC_LOG_KEEP='%s'\n"       "$GC_HC_LOG_KEEP"
+    printf "GC_HC_LOG_RETENTION='%s'\n"  "$GC_HC_LOG_RETENTION"
   } > "$CONFIG_FILE"
 
   chmod 0600 "$CONFIG_FILE"
@@ -158,31 +160,67 @@ configure() {
   ok "config saved: $CONFIG_FILE"
 }
 
+config_row() {
+  local key="${1:?missing key}"
+  local value="${2:-<unset>}"
+  [[ -n "$value" ]] || value="<unset>"
+  printf '  %-30s : %s\n' "$key" "$value"
+}
+
+config_section() {
+  local title="${1:?missing title}"
+  printf '\n%s\n' "────────────────────────────────────────────────────────"
+  printf '  %s\n' "$title"
+  printf '%s\n' "────────────────────────────────────────────────────────"
+}
+
 show_config() {
   if ! load_config; then
     die "config missing"
     return 1
   fi
 
-  printf 'GCLOUD_HOSTED_METRICS_URL=%s\n' "${GCLOUD_HOSTED_METRICS_URL:-}"
-  printf 'GCLOUD_HOSTED_METRICS_ID=%s\n'  "${GCLOUD_HOSTED_METRICS_ID:-}"
-  printf 'GCLOUD_HOSTED_LOGS_URL=%s\n'    "${GCLOUD_HOSTED_LOGS_URL:-}"
-  printf 'GCLOUD_HOSTED_LOGS_ID=%s\n'     "${GCLOUD_HOSTED_LOGS_ID:-}"
-  printf 'GCLOUD_FM_URL=%s\n'             "${GCLOUD_FM_URL:-}"
-  printf 'GCLOUD_RW_API_KEY=%s\n'         "$(mask "${GCLOUD_RW_API_KEY:-}")"
-  printf 'GC_HC_INTERVAL=%s\n'          "${GC_HC_INTERVAL:-}"
-  printf 'GC_HC_TIMEOUT=%s\n'           "${GC_HC_TIMEOUT:-}"
-  printf 'GC_HC_RETRIES=%s\n'           "${GC_HC_RETRIES:-}"
-  printf 'GC_HC_RETRY_DELAY=%s\n'       "${GC_HC_RETRY_DELAY:-}"
-  printf 'GC_HC_DNS=%s\n'               "${GC_HC_DNS:-}"
-  printf 'GC_HC_TLS=%s\n'               "${GC_HC_TLS:-}"
-  printf 'GC_HC_LOKI_WRITE=%s\n'        "${GC_HC_LOKI_WRITE:-}"
-  printf 'GC_HC_PROM_QUERY=%s\n'        "${GC_HC_PROM_QUERY:-}"
-  printf 'GC_HC_FLEET=%s\n'             "${GC_HC_FLEET:-}"
-  printf 'GC_HC_TRACE=%s\n'          "${GC_HC_TRACE:-}"
-  printf 'GC_HC_TRACE_TOOL=%s\n'     "${GC_HC_TRACE_TOOL:-}"
-  printf 'GC_HC_TRACE_TIMEOUT=%s\n'  "${GC_HC_TRACE_TIMEOUT:-}"
-  printf 'GC_HC_TRACE_MAX_HOPS=%s\n' "${GC_HC_TRACE_MAX_HOPS:-}"
-  printf 'GC_HC_TRACE_LOG_KEEP=%s\n' "${GC_HC_TRACE_LOG_KEEP:-}"
-  printf 'GC_HC_LOG_KEEP=%s\n'       "${GC_HC_LOG_KEEP:-}"
+  config_section "Grafana Cloud"
+  config_row "GCLOUD_HOSTED_METRICS_URL" "${GCLOUD_HOSTED_METRICS_URL:-}"
+  config_row "GCLOUD_HOSTED_METRICS_ID" "${GCLOUD_HOSTED_METRICS_ID:-}"
+  config_row "GCLOUD_HOSTED_LOGS_URL" "${GCLOUD_HOSTED_LOGS_URL:-}"
+  config_row "GCLOUD_HOSTED_LOGS_ID" "${GCLOUD_HOSTED_LOGS_ID:-}"
+  config_row "GCLOUD_FM_URL" "${GCLOUD_FM_URL:-}"
+  config_row "GCLOUD_RW_API_KEY" "$(mask "${GCLOUD_RW_API_KEY:-}")"
+
+  config_section "Checks"
+  config_row "GC_HC_INTERVAL" "${GC_HC_INTERVAL:-}"
+  config_row "GC_HC_TIMEOUT" "${GC_HC_TIMEOUT:-}"
+  config_row "GC_HC_RETRIES" "${GC_HC_RETRIES:-}"
+  config_row "GC_HC_RETRY_DELAY" "${GC_HC_RETRY_DELAY:-}"
+  config_row "GC_HC_DNS" "${GC_HC_DNS:-}"
+  config_row "GC_HC_TLS" "${GC_HC_TLS:-}"
+  config_row "GC_HC_LOKI_WRITE" "${GC_HC_LOKI_WRITE:-}"
+  config_row "GC_HC_PROM_QUERY" "${GC_HC_PROM_QUERY:-}"
+  config_row "GC_HC_FLEET" "${GC_HC_FLEET:-}"
+  config_row "GC_HC_LOG_KEEP" "${GC_HC_LOG_KEEP:-}"
+  config_row "GC_HC_LOG_RETENTION" "${GC_HC_LOG_RETENTION:-}"
+
+  config_section "Trace"
+  config_row "GC_HC_TRACE" "${GC_HC_TRACE:-}"
+  config_row "GC_HC_TRACE_TOOL" "${GC_HC_TRACE_TOOL:-}"
+  config_row "GC_HC_TRACE_TIMEOUT" "${GC_HC_TRACE_TIMEOUT:-}"
+  config_row "GC_HC_TRACE_MAX_HOPS" "${GC_HC_TRACE_MAX_HOPS:-}"
+  config_row "GC_HC_TRACE_LOG_KEEP" "${GC_HC_TRACE_LOG_KEEP:-}"
+  config_row "GC_HC_TRACE_LOG_RETENTION" "${GC_HC_TRACE_LOG_RETENTION:-}"
+}
+
+show_all_config() {
+  printf '\n%s\n' "────────────────────────────────────────────────────────"
+  printf '  gc-hc config\n'
+  printf '%s\n' "────────────────────────────────────────────────────────"
+  config_row "GC_HC_CONFIG_FILE" "$CONFIG_FILE"
+  config_row "GC_HC_MAIL_CONFIG_FILE" "$MAIL_CONFIG_FILE"
+  show_config
+  show_mail_config || {
+    config_section "Mail"
+    config_row "GC_HC_MAIL_ENABLED" "false"
+    config_row "GC_HC_MAIL_CONFIG" "$MAIL_CONFIG_FILE"
+  }
+  printf '%s\n' "────────────────────────────────────────────────────────"
 }

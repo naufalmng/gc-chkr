@@ -33,6 +33,7 @@ GC_HC_FLEET="${GC_HC_FLEET:-true}"
 # forever — manage via logrotate). Default 100 ≈ 8h of timer-mode history
 # at 5min interval, ~60KB on disk.
 GC_HC_LOG_KEEP="${GC_HC_LOG_KEEP:-100}"
+GC_HC_LOG_RETENTION="${GC_HC_LOG_RETENTION:-24h}"
 
 # Auto-traceroute on failure. auto = capture once per failure run, reset
 # state when probe recovers. always = force every run. never = disabled.
@@ -43,6 +44,24 @@ GC_HC_TRACE_TOOL="${GC_HC_TRACE_TOOL:-auto}"
 GC_HC_TRACE_TIMEOUT="${GC_HC_TRACE_TIMEOUT:-2}"
 GC_HC_TRACE_MAX_HOPS="${GC_HC_TRACE_MAX_HOPS:-15}"
 GC_HC_TRACE_LOG_KEEP="${GC_HC_TRACE_LOG_KEEP:-50}"
+GC_HC_TRACE_LOG_RETENTION="${GC_HC_TRACE_LOG_RETENTION:-24h}"
+
+GC_HC_CONFIG_SMTP="false"
+GC_HC_CONFIG_SHOW="false"
+GC_HC_MAIL_TEST=""
+GC_HC_MAIL_ENABLED="${GC_HC_MAIL_ENABLED:-false}"
+GC_HC_MAIL_ON="${GC_HC_MAIL_ON:-change}"
+GC_HC_MAIL_PROVIDER="${GC_HC_MAIL_PROVIDER:-custom}"
+GC_HC_MAIL_TO="${GC_HC_MAIL_TO:-}"
+GC_HC_MAIL_FROM="${GC_HC_MAIL_FROM:-}"
+GC_HC_MAIL_HOST="${GC_HC_MAIL_HOST:-}"
+GC_HC_MAIL_PORT="${GC_HC_MAIL_PORT:-587}"
+GC_HC_MAIL_USER="${GC_HC_MAIL_USER:-}"
+GC_HC_MAIL_PASS="${GC_HC_MAIL_PASS:-}"
+GC_HC_MAIL_TLS="${GC_HC_MAIL_TLS:-starttls}"
+GC_HC_MAIL_AUTH="${GC_HC_MAIL_AUTH:-plain}"
+GC_HC_MAIL_COOLDOWN="${GC_HC_MAIL_COOLDOWN:-3600}"
+GC_HC_MAIL_SUBJECT_PREFIX="${GC_HC_MAIL_SUBJECT_PREFIX:-[GC-HC]}"
 
 CHECKS=()
 PASS=0

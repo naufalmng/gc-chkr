@@ -141,8 +141,11 @@ run_check() {
   # JSONL: one record per line so tail/grep/jq -c work cleanly. The trailing
   # newline matters — without it `grep` and `wc -l` undercount the last entry.
   printf '%s\n' "$result" >> "$LOG_FILE"
+  log_time_rotate "$LOG_FILE" "${GC_HC_LOG_RETENTION:-24h}" jsonl
   log_tail_rotate "$LOG_FILE" "${GC_HC_LOG_KEEP:-100}" '^'
   chmod 0640 "$RESULT_FILE" "$LOG_FILE" 2>/dev/null || true
+
+  notify_mail_from_result "$result" "$overall" "$host"
 
   # Output mode:
   #   --json or non-TTY (piped/redirected) → raw JSON (machine-readable)

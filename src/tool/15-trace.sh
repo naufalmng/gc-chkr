@@ -192,7 +192,7 @@ trace_log_write() {
     printf '%s\n' "$raw"
   } >> "$path" 2>/dev/null || return 0
 
-  # Tail-rotate: keep only the last $keep "=== ... ===" blocks.
+  log_time_rotate "$path" "${GC_HC_TRACE_LOG_RETENTION:-24h}" trace
   log_tail_rotate "$path" "$keep" '^=== '
 
   chmod 0640 "$path" 2>/dev/null || true

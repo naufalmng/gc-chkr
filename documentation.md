@@ -65,7 +65,7 @@ After install, both `gc-hc` and `gchc` work — `gchc` is a one-line wrapper tha
 | --- | --- |
 | `gc-hc onboard` | Configure, enable the systemd timer, run the first check |
 | `gc-hc config` | Create or update `/etc/gc-hc/env` |
-| `gc-hc show-config` | Print the config with the API key masked |
+| `gc-hc config show` / `--show` | Print the config with the API key masked |
 | `gc-hc check` | Run a healthcheck once |
 | `gc-hc check --json` | Same, but emit only the result JSON (machine-readable) |
 | `gc-hc status` | Show timer state, last result, next scheduled run |
@@ -86,7 +86,7 @@ After install, both `gc-hc` and `gchc` work — `gchc` is a one-line wrapper tha
   timer        : ✓ active
   service      : ✓ inactive
   last check   : ✓ pass
-  next run     : Mon 2026-05-25 14:35:00 UTC
+  next run     : 00h 04m 12s left
 ────────────────────────────────────────────────────────
   tool         : gc-hc 2.0.0
   mode         : system
@@ -132,16 +132,52 @@ Configured via `/etc/gc-hc/env` (system mode) or `./.gc-hc/env` (standalone). Th
 | `GC_HC_LOKI_WRITE`               | optional | `false` to skip the Loki write probe                    |
 | `GC_HC_PROM_QUERY`               | optional | `false` to skip the Prometheus query probe              |
 | `GC_HC_FLEET`                    | optional | `false` to skip the Fleet probe                         |
-| `GC_HC_LOG_KEEP`                 | optional | Last N check entries kept in `gc-hc.log` (0 disables, default 100) |
+| `GC_HC_LOG_RETENTION`            | optional | Check log age retention (`24h` default, `0` disables)   |
+| `GC_HC_LOG_KEEP`                 | optional | Fallback last N check entries kept (default 100)        |
 | `GC_HC_TRACE`                    | optional | `auto` (default), `always`, or `never` — auto-traceroute on probe failure |
 | `GC_HC_TRACE_TOOL`               | optional | `auto` (default), `traceroute`, or `tracepath`          |
 | `GC_HC_TRACE_TIMEOUT`            | optional | Per-hop timeout, seconds (default 2)                    |
 | `GC_HC_TRACE_MAX_HOPS`           | optional | Abort after N hops (default 15)                         |
-| `GC_HC_TRACE_LOG_KEEP`           | optional | Last N entries kept per probe log (default 50)          |
+| `GC_HC_TRACE_LOG_RETENTION`      | optional | Trace log age retention (`24h` default, `0` disables)   |
+| `GC_HC_TRACE_LOG_KEEP`           | optional | Fallback last N entries kept per probe log (default 50) |
 
 If you're already running [Grafana Alloy](https://grafana.com/docs/alloy/latest/) and the same vars are set in `/etc/default/alloy` or `/etc/sysconfig/alloy`, `gc-hc` will pick them up automatically.
 
-The config file is mode `0600` and the API key is masked everywhere it's printed (`status`, `show-config`).
+The config file is mode `0600` and the API key is masked everywhere it's printed (`status`, `config show`).
+
+SMTP mail notifications are configured separately in `/etc/gc-hc/mail.env`
+(system mode) or `./.gc-hc/mail.env` (standalone) to keep mail credentials out
+of the core healthcheck config:
+
+```bash
+sudo gc-hc config smtp
+gc-hc config smtp --test        # default test verdict: fail
+gc-hc config smtp --test warn   # custom test verdict: warn/pass/fail
+```
+
+Non-interactive setup example:
+
+```bash
+sudo GC_HC_MAIL_ENABLED=true \
+  GC_HC_MAIL_ON=change \
+  GC_HC_MAIL_PROVIDER=gmail \
+  GC_HC_MAIL_TO=ops@example.com \
+  GC_HC_MAIL_FROM=gc@example.com \
+  GC_HC_MAIL_USER=gc@example.com \
+  GC_HC_MAIL_PASS=abcdefghijklmnop \
+  gc-hc config smtp --yes
+```
+
+`GC_HC_MAIL_PASS` is stored in `mail.env`, so that file is mode `0600` and must
+be treated as secret. `config show` only prints `GC_HC_MAIL_PASS=(set)`.
+Use comma-separated `GC_HC_MAIL_TO` for multiple recipients. Delivery uses
+`msmtp`; install it with:
+
+```bash
+sudo apt-get install -y msmtp ca-certificates
+```
+
+Run `gc-hc config smtp --test` after SMTP config exists to send a test message.
 
 ### How it's wired
 
@@ -214,7 +250,7 @@ The build pipeline concatenates source modules in lexical order, embeds asset fi
 
 - **No jq dependency.** Result JSON is hand-assembled with a pure-bash `json_escape`. The healthcheck must keep working even on minimal Debian images.
 - **`/dev/tty` for prompts.** That's what makes `curl ... | sudo bash` interactive — stdin is the pipe, but the user's terminal is still attached.
-- **API key masking by default.** `show-config` and `status` print `glc_xx...yyyy`; the unredacted value never leaves `/etc/gc-hc/env` (mode `0600`).
+- **API key masking by default.** `config show` and `status` print `glc_xx...yyyy`; the unredacted value never leaves `/etc/gc-hc/env` (mode `0600`).
 - **400 is a pass for `remote_write` empty bodies.** Mimir/Cortex respond 400 to an empty protobuf POST when auth is good, which is genuinely the cheapest reachable+authed probe — annotated explicitly in the result.
 - **Verdict precedence is FAIL > WARN > PASS.** Exit codes mirror that: `0/1/2`. Hook it into your alerting.
 - **One artifact, two lifecycles.** The same script can either build a `.deb` (system mode) or drop a self-contained binary (standalone mode). Same source, different install entry.
@@ -298,7 +334,7 @@ Setelah install, `gc-hc` dan `gchc` dua-duanya jalan — `gchc` itu wrapper satu
 | --- | --- |
 | `gc-hc onboard` | Konfigurasi, aktifkan systemd timer, jalankan check pertama |
 | `gc-hc config` | Bikin atau update `/etc/gc-hc/env` |
-| `gc-hc show-config` | Print config dengan API key di-mask |
+| `gc-hc config show` / `--show` | Print config dengan API key di-mask |
 | `gc-hc check` | Jalankan healthcheck sekali |
 | `gc-hc check --json` | Sama, tapi cuma output JSON (buat script) |
 | `gc-hc status` | Tampilkan state timer, hasil terakhir, jadwal berikutnya |
@@ -319,7 +355,7 @@ Setelah install, `gc-hc` dan `gchc` dua-duanya jalan — `gchc` itu wrapper satu
   timer        : ✓ active
   service      : ✓ inactive
   last check   : ✓ pass
-  next run     : Mon 2026-05-25 14:35:00 UTC
+  next run     : 00h 04m 12s left
 ────────────────────────────────────────────────────────
   tool         : gc-hc 2.0.0
   mode         : system
@@ -365,16 +401,47 @@ Disimpan di `/etc/gc-hc/env` (system mode) atau `./.gc-hc/env` (standalone). Flo
 | `GC_HC_LOKI_WRITE`               | opsional | `false` untuk skip Loki write probe                     |
 | `GC_HC_PROM_QUERY`               | opsional | `false` untuk skip Prometheus query probe               |
 | `GC_HC_FLEET`                    | opsional | `false` untuk skip Fleet probe                          |
-| `GC_HC_LOG_KEEP`                 | opsional | Last N entry check yang disimpan di `gc-hc.log` (0 = matikan rotasi, default 100) |
+| `GC_HC_LOG_RETENTION`            | opsional | Retention umur check log (`24h` default, `0` disable)   |
+| `GC_HC_LOG_KEEP`                 | opsional | Fallback last N entry check yang disimpan (default 100) |
 | `GC_HC_TRACE`                    | opsional | `auto` (default), `always`, atau `never` — auto-traceroute saat probe fail |
 | `GC_HC_TRACE_TOOL`               | opsional | `auto` (default), `traceroute`, atau `tracepath`        |
 | `GC_HC_TRACE_TIMEOUT`            | opsional | Timeout per hop, detik (default 2)                      |
 | `GC_HC_TRACE_MAX_HOPS`           | opsional | Abort setelah N hop (default 15)                        |
-| `GC_HC_TRACE_LOG_KEEP`           | opsional | Last N entry yang disimpan per probe log (default 50)   |
+| `GC_HC_TRACE_LOG_RETENTION`      | opsional | Retention umur trace log (`24h` default, `0` disable)   |
+| `GC_HC_TRACE_LOG_KEEP`           | opsional | Fallback last N entry per probe log (default 50)        |
 
 Kalau lu udah jalanin [Grafana Alloy](https://grafana.com/docs/alloy/latest/) dan variabel yang sama sudah di-set di `/etc/default/alloy` atau `/etc/sysconfig/alloy`, `gc-hc` akan otomatis pakai itu.
 
-File config mode `0600` dan API key di-mask di mana pun di-print (`status`, `show-config`).
+File config mode `0600` dan API key di-mask di mana pun di-print (`status`, `config show`).
+
+Notifikasi email SMTP disimpan terpisah di `/etc/gc-hc/mail.env` (system mode) atau `./.gc-hc/mail.env` (standalone), supaya credential email tidak campur dengan config healthcheck utama:
+
+```bash
+sudo gc-hc config smtp
+gc-hc config smtp --test        # default test verdict: fail
+gc-hc config smtp --test warn   # custom test verdict: warn/pass/fail
+```
+
+Contoh setup non-interactive:
+
+```bash
+sudo GC_HC_MAIL_ENABLED=true \
+  GC_HC_MAIL_ON=change \
+  GC_HC_MAIL_PROVIDER=gmail \
+  GC_HC_MAIL_TO=ops@example.com \
+  GC_HC_MAIL_FROM=gc@example.com \
+  GC_HC_MAIL_USER=gc@example.com \
+  GC_HC_MAIL_PASS=abcdefghijklmnop \
+  gc-hc config smtp --yes
+```
+
+`GC_HC_MAIL_PASS` disimpan di `mail.env`, jadi file itu mode `0600` dan harus dianggap secret. `config show` cuma print `GC_HC_MAIL_PASS=(set)`. Pakai comma-separated `GC_HC_MAIL_TO` untuk banyak recipient. Delivery memakai `msmtp`; install dengan:
+
+```bash
+sudo apt-get install -y msmtp ca-certificates
+```
+
+Jalankan `gc-hc config smtp --test` setelah SMTP config ada untuk mengirim test message.
 
 ### Cara kerja
 
@@ -447,7 +514,7 @@ Build pipeline-nya nge-concat module sumber dalam urutan leksikal, embed asset f
 
 - **No jq dependency.** JSON hasil di-assemble dengan `json_escape` pure-bash. Healthcheck harus tetap jalan di Debian image yang minimal banget.
 - **Pakai `/dev/tty` buat prompt.** Itu yang bikin `curl ... | sudo bash` tetap interaktif — stdin sudah ke-occupy pipe, tapi terminal user masih nyangkut di `/dev/tty`.
-- **API key di-mask by default.** `show-config` dan `status` cuma nampilin `glc_xx...yyyy`; nilai aslinya ga pernah keluar dari `/etc/gc-hc/env` (mode `0600`).
+- **API key di-mask by default.** `config show` dan `status` cuma nampilin `glc_xx...yyyy`; nilai aslinya ga pernah keluar dari `/etc/gc-hc/env` (mode `0600`).
 - **400 = pass untuk `remote_write` body kosong.** Mimir/Cortex jawab 400 ke POST protobuf kosong kalau auth-nya bener, dan itu probe paling murah buat verify reachable+authed — di-annotate eksplisit di hasil.
 - **Verdict precedence: FAIL > WARN > PASS.** Exit code mirror itu: `0/1/2`. Tinggal pasang ke alerting.
 - **Satu artifact, dua lifecycle.** Script yang sama bisa build `.deb` (system mode) atau drop binary self-contained (standalone mode). Source sama, entry install beda.

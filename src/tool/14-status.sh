@@ -26,6 +26,48 @@ extract_json_value() {
   printf '%s' "$value"
 }
 
+format_countdown() {
+  local seconds="${1:-0}"
+  local days=0 hours=0 minutes=0
+
+  [[ "$seconds" =~ ^[0-9]+$ ]] || { printf 'n/a'; return 0; }
+
+  days=$((seconds / 86400))
+  seconds=$((seconds % 86400))
+  hours=$((seconds / 3600))
+  seconds=$((seconds % 3600))
+  minutes=$((seconds / 60))
+  seconds=$((seconds % 60))
+
+  if (( days > 0 )); then
+    printf '%dd %02dh %02dm %02ds left' "$days" "$hours" "$minutes" "$seconds"
+    return 0
+  fi
+
+  printf '%02dh %02dm %02ds left' "$hours" "$minutes" "$seconds"
+}
+
+next_run_countdown() {
+  local next_time=""
+  local next_epoch=""
+  local now_epoch=""
+
+  next_time="$(systemctl show "$TIMER_NAME" --property=NextElapseUSecRealtime --value 2>/dev/null || true)"
+  next_time="$(trim "$next_time")"
+  [[ -n "$next_time" && "$next_time" != "n/a" ]] || { printf 'n/a'; return 0; }
+
+  next_epoch="$(date -d "$next_time" +%s 2>/dev/null || true)"
+  now_epoch="$(date +%s 2>/dev/null || true)"
+  [[ "$next_epoch" =~ ^[0-9]+$ && "$now_epoch" =~ ^[0-9]+$ ]] || { printf 'n/a'; return 0; }
+
+  if (( next_epoch <= now_epoch )); then
+    printf '00h 00m 00s left'
+    return 0
+  fi
+
+  format_countdown "$((next_epoch - now_epoch))"
+}
+
 format_result() {
   local file="${1:?missing file}"
   local overall started finished
@@ -96,11 +138,7 @@ show_status() {
     timer_status="$(systemctl is-enabled "$TIMER_NAME" 2>/dev/null)" || true
     : "${timer_state:=inactive}" "${timer_status:=disabled}"
 
-    if systemctl list-timers "$TIMER_NAME" --no-legend --no-pager >/dev/null 2>&1; then
-      next_run="$(systemctl list-timers "$TIMER_NAME" --no-legend --no-pager 2>/dev/null | awk 'NF {print $1" "$2" "$3" "$4; exit}')"
-      next_run="$(trim "$next_run")"
-      [[ -n "$next_run" ]] || next_run="n/a"
-    fi
+    next_run="$(next_run_countdown)"
   fi
 
   # Interval source of truth: prefer the persisted/active value, otherwise the
@@ -135,6 +173,8 @@ show_status() {
   printf '  %-13s: %s\n'    "mode"   "$MODE"
   printf '  %-13s: %s\n'    "binary" "$SELF_PATH"
   printf '  %-13s: %s\n'    "config" "$CONFIG_FILE"
+  printf '  %-13s: %s\n'    "mail"   "$(mail_status_line)"
+  printf '  %-13s: %s\n'    "mail config" "$MAIL_CONFIG_FILE"
   printf '  %-13s: %s\n'    "state"  "$RESULT_FILE"
   printf '  %-13s: %s\n'    "log"    "$LOG_FILE"
   printf '%s\n' "$separator"

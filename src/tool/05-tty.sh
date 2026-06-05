@@ -20,6 +20,27 @@ tty_read() {
   printf '%s' "$answer"
 }
 
+tty_read_secret() {
+  local prompt="${1:?missing prompt}"
+  local answer=""
+
+  if [[ ! -r /dev/tty ]]; then
+    return 2
+  fi
+
+  printf '%s' "$prompt" > /dev/tty
+  stty -echo < /dev/tty
+  if ! IFS= read -r answer < /dev/tty; then
+    stty echo < /dev/tty
+    return 1
+  fi
+  stty echo < /dev/tty
+  printf '\n' > /dev/tty
+
+  answer="$(trim "$answer")"
+  printf '%s' "$answer"
+}
+
 confirm() {
   local prompt="${1:?missing prompt}"
   local default="${2:-n}"

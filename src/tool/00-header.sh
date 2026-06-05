@@ -28,6 +28,7 @@ else
 fi
 
 readonly CONFIG_FILE="${CONFIG_DIR}/env"
+readonly MAIL_CONFIG_FILE="${CONFIG_DIR}/mail.env"
 readonly RESULT_FILE="${STATE_DIR}/last.json"
 readonly LOG_FILE="${LOG_DIR}/gc-hc.log"
 readonly SERVICE_NAME="gc-hc.service"

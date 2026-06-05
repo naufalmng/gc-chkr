@@ -16,9 +16,15 @@ source src/tool/04-utils.sh
 # shellcheck disable=SC1091
 source src/tool/07-validate.sh
 # shellcheck disable=SC1091
+source src/tool/08-config.sh
+# shellcheck disable=SC1091
 source src/tool/09-url.sh
 # shellcheck disable=SC1091
 source src/tool/15-trace.sh
+# shellcheck disable=SC1091
+source src/tool/16-mail.sh
+# shellcheck disable=SC1091
+source src/tool/14-status.sh
 
 die()  { printf 'die: %s\n'  "$1" >&2; return 1; }
 warn() { printf 'warn: %s\n' "$1" >&2; }
@@ -190,6 +196,121 @@ assert_eq 3 "$(wc -l < "$LOG_TMP" | tr -d ' ')" "keep=0 leaves file untouched"
 rm -f "$LOG_TMP"
 log_tail_rotate "$LOG_TMP" 5 '^'
 assert_eq "1" "$([[ ! -e "$LOG_TMP" ]] && echo 1 || echo 0)" "missing file → no-op"
+
+printf '%s\n' \
+  '{"started":"2000-01-01T00:00:00Z","n":1}' \
+  "{\"started\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"n\":2}" > "$LOG_TMP"
+log_time_rotate "$LOG_TMP" 24h jsonl
+assert_eq "1" "$(grep -c '"n":2' "$LOG_TMP")" "time rotate JSONL keeps fresh"
+assert_eq "0" "$(grep -c '"n":1' "$LOG_TMP")" "time rotate JSONL drops stale"
+
+printf '%s\n' \
+  '=== 2000-01-01T00:00:00Z ===' '1: old 1ms' \
+  "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) ===" '1: fresh 1ms' > "$LOG_TMP"
+log_time_rotate "$LOG_TMP" 24h trace
+assert_eq "1" "$(grep -c 'fresh' "$LOG_TMP")" "time rotate trace keeps fresh"
+assert_eq "0" "$(grep -c 'old' "$LOG_TMP")" "time rotate trace drops stale"
+
+echo "countdown format:"
+assert_eq "00h 00m 00s left" "$(format_countdown 0)" "zero seconds"
+assert_eq "00h 00m 59s left" "$(format_countdown 59)" "seconds only"
+assert_eq "00h 01m 05s left" "$(format_countdown 65)" "minutes seconds"
+assert_eq "01h 01m 01s left" "$(format_countdown 3661)" "hours minutes seconds"
+assert_eq "1d 01h 01m 01s left" "$(format_countdown 90061)" "days hours minutes seconds"
+
+echo "mail provider defaults:"
+GC_HC_MAIL_PROVIDER="gmail"
+mail_provider_defaults
+assert_eq "smtp.gmail.com" "$GC_HC_MAIL_HOST" "gmail host"
+assert_eq "587" "$GC_HC_MAIL_PORT" "gmail port"
+assert_eq "starttls" "$GC_HC_MAIL_TLS" "gmail tls"
+assert_eq "on" "$GC_HC_MAIL_AUTH" "gmail auth uses msmtp default"
+GC_HC_MAIL_PROVIDER="outlook"
+mail_provider_defaults
+assert_eq "smtp.office365.com" "$GC_HC_MAIL_HOST" "outlook host"
+assert_eq "on" "$GC_HC_MAIL_AUTH" "outlook auth uses msmtp default"
+GC_HC_MAIL_PROVIDER="yahoo"
+mail_provider_defaults
+assert_eq "smtp.mail.yahoo.com" "$GC_HC_MAIL_HOST" "yahoo host"
+assert_eq "on" "$GC_HC_MAIL_AUTH" "yahoo auth uses msmtp default"
+
+echo "mail validation + masking:"
+GC_HC_MAIL_ENABLED="true"
+GC_HC_MAIL_ON="change"
+GC_HC_MAIL_PROVIDER="gmail"
+GC_HC_MAIL_TO="ops@example.com"
+GC_HC_MAIL_FROM="gc@example.com"
+GC_HC_MAIL_USER="gc@example.com"
+GC_HC_MAIL_PASS="abcdefghijklmnop"
+GC_HC_MAIL_COOLDOWN="3600"
+GC_HC_MAIL_SUBJECT_PREFIX="[GC-HC]"
+mail_provider_defaults
+assert_ok "valid gmail mail config" validate_mail_config
+assert_eq "(set)" "$(secret_state "$GC_HC_MAIL_PASS")" "mail pass masked as set"
+
+echo "mail notification decision:"
+STATE_DIR="$(mktemp -d)/state"
+GC_HC_MAIL_ENABLED="true"
+GC_HC_MAIL_ON="change"
+GC_HC_MAIL_COOLDOWN="3600"
+assert_ok "change sends first signature" should_send_mail "fail" "fail|fail:1" 1000
+record_mail_state "fail|fail:1" 1000
+assert_fail "change skips same signature" should_send_mail "fail" "fail|fail:1" 1010
+assert_ok "change sends changed signature" should_send_mail "pass" "pass|fail:0" 1020
+GC_HC_MAIL_ON="fail"
+record_mail_state "fail|fail:1" 1000
+assert_fail "fail mode obeys cooldown" should_send_mail "fail" "fail|fail:1" 1200
+assert_ok "fail mode sends after cooldown" should_send_mail "fail" "fail|fail:1" 5000
+rm -rf "$STATE_DIR"
+
+echo "mail render/build:"
+GC_HC_MAIL_FROM="gc@example.com"
+GC_HC_MAIL_TO="ops@example.com"
+GC_HC_MAIL_HOST="smtp.gmail.com"
+GC_HC_MAIL_PORT="587"
+GC_HC_MAIL_USER="gc@example.com"
+GC_HC_MAIL_PASS="abcdefghijklmnop"
+GC_HC_MAIL_TLS="starttls"
+GC_HC_MAIL_AUTH="on"
+GC_HC_MAIL_SUBJECT_PREFIX="[GC-HC]"
+MAIL_TMP="$(mktemp)"
+build_msmtp_config "$MAIL_TMP"
+assert_eq "1" "$(grep -c '^host smtp.gmail.com$' "$MAIL_TMP")" "msmtp host rendered"
+assert_eq "1" "$(grep -c '^auth on$' "$MAIL_TMP")" "msmtp auth rendered"
+assert_eq "0" "$(grep -c '^auth \*\*\*$' "$MAIL_TMP")" "msmtp auth placeholder absent"
+assert_eq "1" "$(grep -c '^password abcdefghijklmnop$' "$MAIL_TMP")" "msmtp password rendered only in temp config"
+rm -f "$MAIL_TMP"
+subject="$(render_mail_subject "fail" "node-1")"
+assert_eq "[FAIL][node-1] Health Check Failed | GC-HC" "$subject" "mail subject fail"
+assert_eq "[WARN][node-1] Health Check Warned | GC-HC" "$(render_mail_subject "warn" "node-1")" "mail subject warn"
+assert_eq "[PASS][node-1] Health Check Passed | GC-HC" "$(render_mail_subject "pass" "node-1")" "mail subject pass"
+mail_body="$(render_mail_body '{"tool":"gc-hc","version":"2.4.0","mode":"standalone","host":"node-1","started":"2026-06-05T00:00:00Z","finished":"2026-06-05T00:00:01Z","overall":"fail","summary":{"pass":1,"warn":0,"fail":1,"skip":0},"checks":[]}' "$subject")"
+assert_eq "1" "$(printf '%s' "$mail_body" | grep -c '^Subject: \[FAIL\]\[node-1\] Health Check Failed | GC-HC$')" "mail body subject header"
+assert_eq "1" "$(printf '%s' "$mail_body" | grep -c 'Alert Summary')" "mail body summary title"
+assert_eq "1" "$(printf '%s' "$mail_body" | grep -c '^FAIL        : 1$')" "mail body fail count"
+assert_eq "ops@example.com
+sec@example.com" "$(mail_recipients 'ops@example.com, sec@example.com')" "comma recipients split and trim"
+assert_eq "1" "$(mail_test_result fail | grep -c '"overall":"fail"')" "default test result fail"
+assert_eq "1" "$(mail_test_result warn | grep -c '"overall":"warn"')" "custom test result warn"
+assert_eq "1" "$(mail_test_result pass | grep -c '"overall":"pass"')" "custom test result pass"
+
+MAIL_CONFIG_DIR="$(mktemp -d)"
+CONFIG_DIR="$MAIL_CONFIG_DIR"
+MAIL_CONFIG_FILE="$MAIL_CONFIG_DIR/mail.env"
+assert_eq "✗ disabled" "$(mail_status_line)" "mail status missing config disabled"
+GC_HC_MAIL_ENABLED="true"
+GC_HC_MAIL_PROVIDER="gmail"
+GC_HC_MAIL_TO="ops@example.com"
+GC_HC_MAIL_FROM="gc@example.com"
+GC_HC_MAIL_HOST="smtp.gmail.com"
+GC_HC_MAIL_PORT="587"
+GC_HC_MAIL_USER="gc@example.com"
+GC_HC_MAIL_PASS="abcdefghijklmnop"
+GC_HC_MAIL_TLS="starttls"
+GC_HC_MAIL_AUTH="plain"
+write_mail_config
+assert_eq "! enabled (GMAIL, msmtp missing)" "$(PATH=/no-msmtp mail_status_line)" "mail status enabled provider with missing msmtp"
+rm -rf "$MAIL_CONFIG_DIR"
 
 echo
 echo "Total: $PASS passed, $FAIL failed."

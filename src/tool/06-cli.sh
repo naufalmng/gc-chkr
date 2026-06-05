@@ -9,7 +9,11 @@ gc-hc - Grafana Cloud node-side healthcheck
 Usage:
   gc-hc onboard              configure + enable systemd timer
   gc-hc config               create/update config
-  gc-hc show-config          print sanitized config
+  gc-hc config show          print sanitized config
+  gc-hc config --show        print sanitized config
+  gc-hc config --smtp        create/update mail.env SMTP config
+  gc-hc config smtp          create/update mail.env SMTP config
+
   gc-hc check                run healthcheck once
   gc-hc status               show status
   gc-hc logs                 follow logs
@@ -20,10 +24,12 @@ Usage:
 
 Short command:
   gchc onboard
-  gchc config
+  gchc config show
+  gchc config smtp
   gchc check
   gchc status
   gchc logs
+  gchc --help
 
 Long option style:
   gc-hc --onboard
@@ -49,6 +55,9 @@ Options:
   --no-fleet                    skip Fleet check
   --trace                       force traceroute on every probe this run
   --no-trace                    disable traceroute even on failures
+  --show                        show config instead of editing it
+  --smtp                        configure SMTP notification only
+  --test [fail|warn|pass]       send SMTP test email (default: fail)
 
 Environment overrides (also set via gc-hc config):
   GC_HC_INTERVAL    timer interval (1m, 5m, 15m, 1h)  default: 5m
@@ -59,12 +68,21 @@ Environment overrides (also set via gc-hc config):
   GC_HC_LOKI_WRITE  enable Loki write check           default: true
   GC_HC_PROM_QUERY  enable Prometheus query check     default: true
   GC_HC_FLEET       enable Fleet check                default: true
-  GC_HC_LOG_KEEP    last N check entries kept (0=off) default: 100
+  GC_HC_LOG_RETENTION keep check log by age (0=off)    default: 24h
+  GC_HC_LOG_KEEP    fallback last N check entries      default: 100
   GC_HC_TRACE          auto|always|never              default: auto
   GC_HC_TRACE_TOOL     auto|traceroute|tracepath      default: auto
   GC_HC_TRACE_TIMEOUT  per-hop timeout (seconds)      default: 2
   GC_HC_TRACE_MAX_HOPS abort after N hops             default: 15
-  GC_HC_TRACE_LOG_KEEP last N entries kept per probe  default: 50
+  GC_HC_TRACE_LOG_RETENTION keep trace logs by age     default: 24h
+  GC_HC_TRACE_LOG_KEEP last N entries fallback         default: 50
+
+Mail notification env (stored in mail.env):
+  GC_HC_MAIL_ENABLED true|false                       default: false
+  GC_HC_MAIL_ON      change|fail|warn|always          default: change
+  GC_HC_MAIL_PROVIDER gmail|outlook|yahoo|custom      default: custom
+  GC_HC_MAIL_TO / FROM / USER / PASS                  SMTP identity
+  GC_HC_MAIL_HOST / PORT / TLS / AUTH                 SMTP transport
 EOF
 }
 
@@ -98,6 +116,22 @@ parse_args() {
   while (( $# > 0 )); do
     arg="$1"
     case "$arg" in
+      smtp)
+        if [[ "$ACTION" != "config" ]]; then
+          die "smtp subcommand is only valid after config"
+          return 1
+        fi
+        GC_HC_CONFIG_SMTP="true"
+        shift
+        ;;
+      show)
+        if [[ "$ACTION" != "config" ]]; then
+          die "show subcommand is only valid after config"
+          return 1
+        fi
+        GC_HC_CONFIG_SHOW="true"
+        shift
+        ;;
       -i|--interval)
         if [[ $# -lt 2 ]]; then
           die "--interval needs value"
@@ -126,6 +160,17 @@ parse_args() {
       --no-fleet) GC_HC_FLEET="false"; shift ;;
       --trace) TRACE_FORCE="true"; GC_HC_TRACE="always"; shift ;;
       --no-trace) TRACE_FORCE="false"; GC_HC_TRACE="never"; shift ;;
+      --show) GC_HC_CONFIG_SHOW="true"; shift ;;
+      --smtp) GC_HC_CONFIG_SMTP="true"; shift ;;
+      --test)
+        GC_HC_MAIL_TEST="fail"
+        if [[ $# -gt 1 && "$2" =~ ^(fail|warn|pass)$ ]]; then
+          GC_HC_MAIL_TEST="$2"
+          shift 2
+        else
+          shift
+        fi
+        ;;
       *)
         die "unknown option: $arg"
         return 1

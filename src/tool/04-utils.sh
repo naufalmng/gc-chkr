@@ -67,17 +67,59 @@ mask() {
   printf '%s...%s' "${value:0:6}" "${value: -4}"
 }
 
-# Tail-rotate a line-oriented log file: keep the last N "blocks", where a block
-# is delimited by a marker regex. Used by both the check JSONL log (block-per-
-# line, marker = ^) and the trace logs (block-per-entry, marker = ^=== ).
-#
-# Args:
-#   $1 path     - file to rotate
-#   $2 keep     - max blocks to retain; 0 disables rotation entirely
-#   $3 marker   - awk regex matching the start-of-block line (e.g. '^', '^=== ')
-#
-# Pure-function except for the filesystem; safe to call when file doesn't yet
-# exist. Atomic via tmp+mv so a kill mid-rotate can't corrupt the log.
+retention_seconds() {
+  local value="${1:-0}"
+  local number unit
+
+  [[ "$value" != "0" ]] || { printf '0'; return 0; }
+  [[ "$value" =~ ^([0-9]+)([smhd])$ ]] || return 1
+
+  number="${BASH_REMATCH[1]}"
+  unit="${BASH_REMATCH[2]}"
+
+  case "$unit" in
+    s) printf '%s' "$number" ;;
+    m) printf '%s' "$((number * 60))" ;;
+    h) printf '%s' "$((number * 3600))" ;;
+    d) printf '%s' "$((number * 86400))" ;;
+  esac
+}
+
+log_time_rotate() {
+  local path="${1:?missing path}"
+  local retention="${2:-0}"
+  local mode="${3:-jsonl}"
+  local seconds cutoff tmp
+
+  [[ "$retention" != "0" ]] || return 0
+  [[ -s "$path" ]] || return 0
+  seconds="$(retention_seconds "$retention" 2>/dev/null || true)"
+  [[ "$seconds" =~ ^[0-9]+$ && "$seconds" -gt 0 ]] || return 0
+  cutoff="$(date -u -d "-${seconds} seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
+  [[ -n "$cutoff" ]] || return 0
+
+  tmp="${path}.rot"
+  if [[ "$mode" == "trace" ]]; then
+    awk -v cutoff="$cutoff" '
+      /^=== / {
+        stamp=$2
+        keep=(stamp >= cutoff)
+      }
+      keep { print }
+    ' "$path" > "$tmp" 2>/dev/null && mv "$tmp" "$path" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+    return 0
+  fi
+
+  awk -v cutoff="$cutoff" '
+    {
+      stamp=$0
+      sub(/^.*"started":"/, "", stamp)
+      sub(/".*$/, "", stamp)
+      if (stamp >= cutoff) print
+    }
+  ' "$path" > "$tmp" 2>/dev/null && mv "$tmp" "$path" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+}
+
 log_tail_rotate() {
   local path="${1:?missing path}"
   local keep="${2:-0}"

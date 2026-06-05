@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-06-05
+
+### Added
+- Optional SMTP mail notifications via `msmtp`, configured separately in
+  `${CONFIG_DIR}/mail.env` so Grafana Cloud probe config stays isolated in
+  `${CONFIG_DIR}/env`.
+- `gc-hc config smtp` and `gc-hc config --smtp` SMTP-only setup flow with Gmail,
+  Outlook/Microsoft 365, Yahoo, and custom provider presets.
+- Non-interactive SMTP setup via `GC_HC_MAIL_*` environment variables plus
+  `gc-hc config --smtp --yes`.
+- `gc-hc config show` prints both core config and sanitized mail config, reporting
+  `GC_HC_MAIL_PASS=(set)` instead of exposing the SMTP app password.
+- `gc-hc config smtp --test [fail|warn|pass]` sends a test email (default verdict:
+  `fail`); interactive SMTP setup asks `Send test email?` and loops back to the previous SMTP questions when delivery fails.
+- Comma-separated `GC_HC_MAIL_TO` recipients are split and passed to `msmtp` as
+  separate recipient arguments.
+
+### Changed
+- `gc-hc onboard` now offers an opt-in mail notification setup step after core
+  healthcheck config.
+- `gc-hc check` may send mail based on `GC_HC_MAIL_ON` and cooldown state, but
+  SMTP failure never changes the Grafana Cloud health verdict.
+- `gc-hc status` now shows compact mail notification state, e.g.
+  `mail: ✓ enabled (GMAIL)` or `mail: ! enabled (GMAIL, msmtp missing)`, without
+  exposing recipients or SMTP secrets.
+- Config display moved from `gc-hc show-config` to `gc-hc config show` /
+  `gc-hc config --show`.
+- `gc-hc status` now shows `next run` as a full countdown with seconds, e.g.
+  `00h 04m 12s left`, instead of the absolute timestamp.
+- Log retention is now time-based by default with `GC_HC_LOG_RETENTION=24h` and
+  `GC_HC_TRACE_LOG_RETENTION=24h`; existing `*_LOG_KEEP` entry-count settings
+  remain as fallback caps.
+
 ## [2.3.0] - 2026-05-29
 
 ### Added
@@ -16,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `GC_HC_LOG_KEEP` env knob (default 100) — auto-rotate the check log to the
   last N entries. Set to 0 to disable rotation entirely (e.g. when managing
   with system logrotate). Persisted via `gc-hc config` and surfaced in
-  `gc-hc show-config`.
+  `gc-hc config show`.
 - `gc-hc config` interactive flow now offers an opt-in branch to tune the five
   `GC_HC_TRACE_*` knobs. Defaults stay sane; the prompts only appear on
   explicit confirm so the typical onboard remains a 5-question flow.
@@ -59,7 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gc-hc status` removes the redundant `service` row. For a timer-driven unit, the service is `inactive` between runs by design, and the row was duplicating the badge that the `timer` and `last check` rows already carry. The new layout shows `status / timer / last check / interval / next run`.
 
 ### Added
-- Timer interval is now a first-class config key. `GC_HC_INTERVAL` (default `5m`) joins the rest of the `GC_HC_*` family — read from the environment, persisted to `/etc/gc-hc/env` (or `.gc-hc/env` in standalone mode) by `gc-hc config`, and surfaced by `gc-hc show-config`. The existing `-i` / `--interval` flag still works and now writes into the same variable.
+- Timer interval is now a first-class config key. `GC_HC_INTERVAL` (default `5m`) joins the rest of the `GC_HC_*` family — read from the environment, persisted to `/etc/gc-hc/env` (or `.gc-hc/env` in standalone mode) by `gc-hc config`, and surfaced by `gc-hc config show`. The existing `-i` / `--interval` flag still works and now writes into the same variable.
 - `gc-hc status` shows the active interval as a friendly token, e.g. `interval: 5m  (every 5 minutes)`, so you no longer have to `systemctl cat gc-hc.timer` to check the schedule.
 - `gc-hc help` lists the full set of `GC_HC_*` environment overrides with their defaults.
 
